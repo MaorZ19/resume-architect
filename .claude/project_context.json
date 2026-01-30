@@ -1,0 +1,77 @@
+{
+  "project_manifesto": {
+    "name": "AI Resume Architect",
+    "mission": "To replace generic 'resume rewriters' with an intelligent 'Career Interviewer Agent' that extracts hidden value from candidates and tailors it perfectly to specific job descriptions.",
+    "target_audience": "Job seekers who have the skills but lack the ability to sell themselves in writing. Specifically targeting the Israeli and Global tech market.",
+    "business_model": {
+      "type": "Micro-transaction / Pay-per-use",
+      "pricing_strategy": "Low barrier to entry (~$3-5 / 10-20 ILS per optimized resume).",
+      "rationale": "Avoids subscription fatigue. Beats competitors like Teal/Resume.io who force monthly plans."
+    }
+  },
+  "market_analysis": {
+    "current_landscape": "Red Ocean (Highly competitive). Flooded with basic ChatGPT wrappers and expensive subscription tools.",
+    "competitor_weakness": "Most tools only 'rewrite' existing text. They do not 'extract' missing information.",
+    "our_unfair_advantage": "The 'Interviewer' Logic. We don't just polish; we proactively ask questions to uncover achievements the user forgot to mention (e.g., 'Did you improve performance? By how much?')."
+  },
+  "product_spec": {
+    "core_features": [
+      {
+        "name": "The Job Analyzer",
+        "description": "Extracts hard/soft skills, tone, and hidden requirements from the JD (Job Description) URL or text."
+      },
+      {
+        "name": "The Proactive Interviewer (Killer Feature)",
+        "description": "Instead of asking 'What did you do?', the AI suggests plausible achievements based on the role. Example: 'As a React dev, did you optimize load times? usually, this results in a 20% boost. Is this true for you?'"
+      },
+      {
+        "name": "Resume Synthesis",
+        "description": "Rebuilds the resume using ATS-friendly formatting, injecting the extracted keywords and quantified achievements."
+      }
+    ],
+    "user_flow": [
+      "Step 1: Landing Page -> User pastes Job Description URL + Uploads current Resume (PDF).",
+      "Step 2: Analysis (Spinner) -> AI identifies gaps between Candidate and Job.",
+      "Step 3: The Wizard (Chat) -> AI asks 3-5 sharp, high-value questions to bridge the gaps.",
+      "Step 4: Preview -> User sees a blurred/watermarked preview of the optimized resume.",
+      "Step 5: Payment -> User pays small fee.",
+      "Step 6: Download -> Get PDF + Editable Doc + Cover Letter."
+    ]
+  },
+  "technical_architecture": {
+    "framework": "WAT (Workflows, Agents, Tools)",
+    "stack": {
+      "frontend": "Next.js 14+ (App Router), TypeScript",
+      "ui_library": "Tailwind CSS + shadcn/ui + Framer Motion (for smooth wizard transitions)",
+      "backend_logic": "n8n (Self-hosted or Cloud)",
+      "database": "Prisma (PostgreSQL/SQLite) - to store sessions and drafts",
+      "ai_model": "Claude 3.5 Sonnet (via API) - chosen for superior reasoning and coding capabilities",
+      "file_processing": "PDF Parsing Library (e.g., pdf-parse or specialized API) handled within n8n"
+    },
+    "n8n_workflow_structure": {
+      "Route 1 - Ingestion": "Receive PDF + JD -> Parse Text -> Vectorize/Analyze -> Return Initial Gaps.",
+      "Route 2 - Interview": "Receive User Answers -> Contextualize -> Generate Follow-up or Finalize.",
+      "Route 3 - Generation": "Compile Final Data -> Render PDF -> Return Download Link."
+    }
+  },
+  "agent_personas": {
+    "recruiter_agent": {
+      "role": "Analyze JD",
+      "instruction": "Identify the top 5 critical requirements. Ignore fluff. Find the 'pain point' of the hiring manager."
+    },
+    "interviewer_agent": {
+      "role": "Extract Info",
+      "instruction": "Do not be passive. Be suggestive. Look for numbers ($ saved, % improved, time reduced). Challenge the user to quantify their work."
+    },
+    "writer_agent": {
+      "role": "Draft Resume",
+      "instruction": "Use active verbs. Mirror the JD's terminology exactly (for ATS). Format cleanly. No hallucinations."
+    }
+  },
+  "implementation_roadmap": {
+    "phase_1_mvp": "Core flow: Upload -> simple chat (text based) -> Result text output. No payment, local DB.",
+    "phase_2_ui": "Implement the 'Wizard' UI with animations. Real PDF generation.",
+    "phase_3_biz": "Integrate Payment Gateway + Auth.",
+    "phase_4_polish": "Mobile optimization + 'Suggest Achievements' algorithm refinement."
+  }
+}
