@@ -5,6 +5,62 @@ import type { ParsedResume, OptimizedResume } from "@/types/resume";
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
+// API Helper functions
+async function createSession(): Promise<string> {
+  const response = await fetch("/api/session", { method: "POST" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error);
+  return data.session.id;
+}
+
+async function updateSession(sessionId: string, updates: Record<string, unknown>) {
+  const response = await fetch("/api/session", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, ...updates }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error);
+  }
+}
+
+async function scrapeJobUrl(url: string, sessionId: string) {
+  const response = await fetch("/api/scrape", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, sessionId }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error);
+  return data.data;
+}
+
+async function uploadResumeFile(file: File, sessionId: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("sessionId", sessionId);
+
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error);
+  return data;
+}
+
+async function analyzeResume(sessionId: string) {
+  const response = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error);
+  return data.analysis;
+}
+
 interface JobDescriptionInput {
   source: "url" | "text";
   url?: string;
@@ -34,6 +90,9 @@ interface AnalysisState {
 }
 
 interface WizardState {
+  // Session ID for backend
+  sessionId: string | null;
+
   // Current step
   currentStep: WizardStep;
 
@@ -55,6 +114,9 @@ interface WizardState {
   nextStep: () => void;
   prevStep: () => void;
 
+  // Session Actions
+  initSession: () => Promise<string>;
+
   // Job Description Actions
   setJobDescriptionSource: (source: "url" | "text") => void;
   setJobDescriptionUrl: (url: string) => void;
@@ -62,6 +124,8 @@ interface WizardState {
   setJobDescriptionParsed: (parsed: ParsedJobDescription) => void;
   setJobDescriptionLoading: (loading: boolean) => void;
   setJobDescriptionError: (error: string | undefined) => void;
+  submitJobUrl: (url: string) => Promise<void>;
+  submitJobText: (text: string) => Promise<void>;
 
   // Resume Actions
   setResumeSource: (source: "file" | "text") => void;
@@ -70,6 +134,8 @@ interface WizardState {
   setResumeParsed: (parsed: ParsedResume) => void;
   setResumeLoading: (loading: boolean) => void;
   setResumeError: (error: string | undefined) => void;
+  submitResumeFile: (file: File) => Promise<void>;
+  submitResumeText: (text: string) => Promise<void>;
 
   // Analysis Actions
   setAnalysisLoading: (loading: boolean) => void;
@@ -78,6 +144,7 @@ interface WizardState {
   answerQuestion: (questionId: string, answer: string) => void;
   skipQuestion: () => void;
   nextQuestion: () => void;
+  startAnalysis: () => Promise<void>;
 
   // Optimization Actions
   setOptimizedResume: (resume: OptimizedResume) => void;
@@ -111,6 +178,7 @@ export const useWizardStore = create<WizardState>()(
   persist(
     (set, get) => ({
       // Initial State
+      sessionId: null,
       currentStep: 1,
       jobDescription: initialJobDescription,
       resume: initialResume,
@@ -137,6 +205,16 @@ export const useWizardStore = create<WizardState>()(
         if (current > 1) {
           set({ currentStep: (current - 1) as WizardStep });
         }
+      },
+
+      // Session Actions
+      initSession: async () => {
+        let { sessionId } = get();
+        if (!sessionId) {
+          sessionId = await createSession();
+          set({ sessionId });
+        }
+        return sessionId;
       },
 
       // Job Description Actions
@@ -170,6 +248,32 @@ export const useWizardStore = create<WizardState>()(
           jobDescription: { ...state.jobDescription, error },
         })),
 
+      submitJobUrl: async (url: string) => {
+        const sessionId = await get().initSession();
+        set((state) => ({
+          jobDescription: { ...state.jobDescription, isLoading: true, error: undefined, url },
+        }));
+        try {
+          const parsed = await scrapeJobUrl(url, sessionId);
+          set((state) => ({
+            jobDescription: { ...state.jobDescription, isLoading: false, parsed, rawText: parsed.raw_text || parsed.description || "" },
+          }));
+        } catch (error) {
+          set((state) => ({
+            jobDescription: { ...state.jobDescription, isLoading: false, error: (error as Error).message },
+          }));
+          throw error;
+        }
+      },
+
+      submitJobText: async (text: string) => {
+        const sessionId = await get().initSession();
+        set((state) => ({
+          jobDescription: { ...state.jobDescription, rawText: text },
+        }));
+        await updateSession(sessionId, { job_description: { raw_text: text } });
+      },
+
       // Resume Actions
       setResumeSource: (source) =>
         set((state) => ({
@@ -200,6 +304,32 @@ export const useWizardStore = create<WizardState>()(
         set((state) => ({
           resume: { ...state.resume, error },
         })),
+
+      submitResumeFile: async (file: File) => {
+        const sessionId = await get().initSession();
+        set((state) => ({
+          resume: { ...state.resume, isLoading: true, error: undefined, file, fileName: file.name },
+        }));
+        try {
+          await uploadResumeFile(file, sessionId);
+          set((state) => ({
+            resume: { ...state.resume, isLoading: false },
+          }));
+        } catch (error) {
+          set((state) => ({
+            resume: { ...state.resume, isLoading: false, error: (error as Error).message },
+          }));
+          throw error;
+        }
+      },
+
+      submitResumeText: async (text: string) => {
+        const sessionId = await get().initSession();
+        set((state) => ({
+          resume: { ...state.resume, rawText: text },
+        }));
+        await updateSession(sessionId, { resume_data: { raw_text: text } });
+      },
 
       // Analysis Actions
       setAnalysisLoading: (isLoading) =>
@@ -253,6 +383,29 @@ export const useWizardStore = create<WizardState>()(
         }
       },
 
+      startAnalysis: async () => {
+        const sessionId = await get().initSession();
+        set((state) => ({
+          analysis: { ...state.analysis, isLoading: true, error: undefined },
+        }));
+        try {
+          const analysisData = await analyzeResume(sessionId);
+          set((state) => ({
+            analysis: {
+              ...state.analysis,
+              isLoading: false,
+              data: analysisData,
+              questions: analysisData.questions || [],
+            },
+          }));
+        } catch (error) {
+          set((state) => ({
+            analysis: { ...state.analysis, isLoading: false, error: (error as Error).message },
+          }));
+          throw error;
+        }
+      },
+
       // Optimization Actions
       setOptimizedResume: (resume) => set({ optimizedResume: resume }),
       setIsOptimizing: (optimizing) => set({ isOptimizing: optimizing }),
@@ -297,6 +450,7 @@ export const useWizardStore = create<WizardState>()(
     {
       name: "resume-wizard-storage",
       partialize: (state) => ({
+        sessionId: state.sessionId,
         currentStep: state.currentStep,
         jobDescription: {
           source: state.jobDescription.source,
